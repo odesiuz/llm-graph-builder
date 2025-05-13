@@ -1,4 +1,3 @@
-
 OPENAI_MODELS = ["openai-gpt-3.5", "openai-gpt-4o", "openai-gpt-4o-mini"]
 GEMINI_MODELS = ["gemini-1.0-pro", "gemini-1.5-pro", "gemini-1.5-flash"]
 GROQ_MODELS = ["groq-llama3"]
@@ -359,12 +358,12 @@ VECTOR_GRAPH_SEARCH_ENTITY_QUERY = """
 
     WITH 
     CASE 
-        WHEN e.embedding IS NULL OR ({embedding_match_min} <= vector.similarity.cosine($embedding, e.embedding) AND vector.similarity.cosine($embedding, e.embedding) <= {embedding_match_max}) THEN 
+        WHEN e.embedding IS NULL OR ({embedding_match_min} <= vector.similarity.cosine($query_vector, e.embedding) AND vector.similarity.cosine($query_vector, e.embedding) <= {embedding_match_max}) THEN 
             collect {{
                 OPTIONAL MATCH path=(e)(()-[rels:!HAS_ENTITY&!PART_OF]-()){{0,1}}(:!Chunk&!Document&!__Community__) 
                 RETURN path LIMIT {entity_limit_minmax_case}
             }}
-        WHEN e.embedding IS NOT NULL AND vector.similarity.cosine($embedding, e.embedding) >  {embedding_match_max} THEN
+        WHEN e.embedding IS NOT NULL AND vector.similarity.cosine($query_vector, e.embedding) >  {embedding_match_max} THEN
             collect {{
                 OPTIONAL MATCH path=(e)(()-[rels:!HAS_ENTITY&!PART_OF]-()){{0,2}}(:!Chunk&!Document&!__Community__) 
                 RETURN path LIMIT {entity_limit_max_case} 
@@ -522,7 +521,7 @@ LOCAL_COMMUNITY_TOP_OUTSIDE_RELS = 20
 LOCAL_COMMUNITY_SEARCH_QUERY = """
 WITH collect(node) AS nodes, 
      avg(score) AS score, 
-     collect({{id: elementId(node), score: score}}) AS metadata
+     collect({{entityids: elementId(node), score: score}}) AS metadata
 
 WITH score, nodes, metadata,
 
@@ -893,3 +892,19 @@ ADDITIONAL_INSTRUCTIONS = """Your goal is to identify and categorize entities wh
 types such as dates, numbers, revenues, and other non-entity information are not extracted as separate nodes.
 Instead, treat these as properties associated with the relevant entities."""
 
+SCHEMA_VISUALIZATION_QUERY = """
+CALL db.schema.visualization() YIELD nodes, relationships
+RETURN
+  [n IN nodes | {
+      element_id: elementId(n),
+      labels: labels(n),
+      properties: apoc.any.properties(n)
+  }] AS nodes,
+  [r IN relationships | {
+      type: type(r),
+      properties: apoc.any.properties(r),
+      element_id: elementId(r),
+      start_node_element_id: elementId(startNode(r)),
+      end_node_element_id: elementId(endNode(r))
+  }] AS relationships;
+"""

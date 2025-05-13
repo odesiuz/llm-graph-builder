@@ -1,4 +1,4 @@
-import { Checkbox, DataGrid, DataGridComponents, Flex, TextLink, Typography, useMediaQuery } from '@neo4j-ndl/react';
+import { Checkbox, DataGrid, DataGridComponents, Flex, Typography, useMediaQuery, Button } from '@neo4j-ndl/react';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { orphanNodeProps } from '../../../../types';
 import { getOrphanNodes } from '../../../../services/GetOrphanNodes';
@@ -44,11 +44,11 @@ export default function DeletePopUpForOrphanNodes({
   const [openGraphView, setOpenGraphView] = useState(false);
   const [viewPoint, setViewPoint] = useState('');
   const { colorMode } = useContext(ThemeWrapperContext);
-
+  const ref = useRef<AbortController>();
   const fetchOrphanNodes = useCallback(async () => {
     try {
       setLoading(true);
-      const apiresponse = await getOrphanNodes();
+      const apiresponse = await getOrphanNodes(ref.current?.signal as AbortSignal);
       setLoading(false);
       if (apiresponse.data.data.length) {
         setOrphanNodes(apiresponse.data.data);
@@ -65,6 +65,7 @@ export default function DeletePopUpForOrphanNodes({
   }, []);
 
   useEffect(() => {
+    ref.current = new AbortController();
     if (userCredentials != null) {
       (async () => {
         await fetchOrphanNodes();
@@ -73,6 +74,7 @@ export default function DeletePopUpForOrphanNodes({
     return () => {
       setOrphanNodes([]);
       setTotalOrphanNodes(0);
+      ref?.current?.abort();
     };
   }, [userCredentials]);
   const columnHelper = createColumnHelper<orphanNodeProps>();
@@ -113,15 +115,16 @@ export default function DeletePopUpForOrphanNodes({
         cell: (info) => {
           return (
             <div className='textellipsis'>
-              <TextLink
-                className='!cursor-pointer !inline'
+              <Button
+                className='cursor-pointer! inline!'
+                fill='text'
+                onClick={() => handleOrphanNodeClick(info.row.id, 'chatInfoView')}
                 htmlAttributes={{
-                  onClick: () => handleOrphanNodeClick(info.row.id, 'chatInfoView'),
                   title: info.getValue() ? info.getValue() : info.row.id,
                 }}
               >
                 {info.getValue() ? info.getValue() : info.row.id}
-              </TextLink>
+              </Button>
             </div>
           );
         },
@@ -257,7 +260,7 @@ export default function DeletePopUpForOrphanNodes({
             headerStyle: 'clean',
           }}
           rootProps={{
-            className: 'max-h-[355px] !overflow-y-auto',
+            className: 'max-h-[355px] overflow-y-auto!',
           }}
           isLoading={isLoading}
           components={{
@@ -291,16 +294,15 @@ export default function DeletePopUpForOrphanNodes({
         <Flex className='mt-3' flexDirection='row' justifyContent='flex-end'>
           <ButtonWithToolTip
             onClick={() => setShowDeletePopUp(true)}
-            size='large'
             loading={loading}
             text={
               isLoading
                 ? 'Fetching Orphan Nodes'
                 : !isLoading && !orphanNodes.length
-                ? 'No Nodes Found'
-                : !table.getSelectedRowModel().rows.length
-                ? 'No Nodes Selected'
-                : `Delete Selected Nodes (${table.getSelectedRowModel().rows.length})`
+                  ? 'No Nodes Found'
+                  : !table.getSelectedRowModel().rows.length
+                    ? 'No Nodes Selected'
+                    : `Delete Selected Nodes (${table.getSelectedRowModel().rows.length})`
             }
             label='Orphan Node deletion button'
             disabled={!table.getSelectedRowModel().rows.length}

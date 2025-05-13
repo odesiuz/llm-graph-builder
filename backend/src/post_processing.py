@@ -3,7 +3,8 @@ import logging
 import time
 from langchain_neo4j import Neo4jGraph
 import os
-from src.shared.common_fn import load_embedding_model
+from src.graph_query import get_graphDB_driver
+from src.shared.common_fn import load_embedding_model,execute_graph_query
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from src.shared.constants import GRAPH_CLEANUP_PROMPT
@@ -137,7 +138,7 @@ def create_vector_fulltext_indexes(uri, username, password, database):
     logging.info("Starting the process of creating full-text indexes.")
 
     try:
-        driver = GraphDatabase.driver(uri, auth=(username, password), database=database)
+        driver = get_graphDB_driver(uri, username, password,database)
         driver.verify_connectivity()
         logging.info("Database connectivity verified.")
     except Exception as e:
@@ -178,8 +179,8 @@ def fetch_entities_for_embedding(graph):
                 MATCH (e)
                 WHERE NOT (e:Chunk OR e:Document OR e:`__Community__`) AND e.embedding IS NULL AND e.id IS NOT NULL
                 RETURN elementId(e) AS elementId, e.id + " " + coalesce(e.description, "") AS text
-                """
-    result = graph.query(query)           
+                """ 
+    result = execute_graph_query(graph,query)        
     return [{"elementId": record["elementId"], "text": record["text"]} for record in result]
 
 def update_embeddings(rows, graph):
@@ -193,7 +194,7 @@ def update_embeddings(rows, graph):
       MATCH (e) WHERE elementId(e) = row.elementId
       CALL db.create.setNodeVectorProperty(e, "embedding", row.embedding)
       """  
-    return graph.query(query,params={'rows':rows})          
+    return execute_graph_query(graph,query,params={'rows':rows})          
 
 def graph_schema_consolidation(graph):
     graphDb_data_Access = graphDBdataAccess(graph)
@@ -222,17 +223,14 @@ def graph_schema_consolidation(graph):
                     SET n:`{new_label}`
                     REMOVE n:`{old_label}`
                     """
-            graph.query(query)
-    
+            execute_graph_query(graph,query)
+
     for old_label, new_label in relation_mapping.items():
         query = f"""
                 MATCH (n)-[r:`{old_label}`]->(m)
                 CREATE (n)-[r2:`{new_label}`]->(m)
                 DELETE r
                 """
-        graph.query(query)
+        execute_graph_query(graph,query)
 
     return None
-                      
-    
-    
